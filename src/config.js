@@ -117,6 +117,8 @@ export const config = {
   homeUrl: process.env.URAWA_HOME_URL || 'https://urawakeiba-funclub.com/',
   // 保有ポイントを読みに行くページ（ログイン後のリダイレクト先）
   pointsUrl: process.env.URAWA_POINTS_URL || 'https://urawakeiba-funclub.com/mypage/',
+  // クーポン入力ページ。未指定ならマイページのリンクから辿る
+  couponUrl: process.env.URAWA_COUPON_URL || '',
   accounts,
   accountWarnings: warnings,
 
@@ -131,6 +133,7 @@ export const config = {
     user: selectorList(process.env.URAWA_USER_SELECTOR) || DEFAULT_USER_SELECTORS,
     pass: selectorList(process.env.URAWA_PASS_SELECTOR) || DEFAULT_PASS_SELECTORS,
     submit: selectorList(process.env.URAWA_SUBMIT_SELECTOR) || DEFAULT_SUBMIT_SELECTORS,
+    coupon: selectorList(process.env.URAWA_COUPON_SELECTOR),
     consent: DEFAULT_CONSENT_SELECTORS,
   },
 };

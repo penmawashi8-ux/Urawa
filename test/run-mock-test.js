@@ -1,96 +1,15 @@
 import fs from 'node:fs/promises';
-import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { ACCOUNTS, SHARED_PASSWORD, startServer, createChecker } from './mock-server.js';
 
 /**
- * ローカルのモックログインサイトに対して src/login.js を動かし、
- * 「成功 → 終了コード 0」「失敗 → 終了コード 1」になることを確認する。
- * （本番サイトにアクセスしないので、何度実行しても安全）
+ * モックサイトに対して src/login.js を動かし、
+ * 複数アカウントの処理・成否判定・ポイント記録を確認する。
  */
 
-// 3 アカウントとも同じパスワード（利用者の実際の設定に合わせている）
-const SHARED_PASSWORD = 'correct-horse';
-const ACCOUNTS = [
-  { email: 'tester1@example.com', password: SHARED_PASSWORD },
-  { email: 'tester2@example.com', password: SHARED_PASSWORD },
-  { email: 'tester3@example.com', password: SHARED_PASSWORD },
-];
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-
-const page = (body) =>
-  `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>モックファンクラブ</title></head><body>${body}</body></html>`;
-
-const loginForm = (error) =>
-  page(`
-    <h1>ログイン</h1>
-    ${error ? `<div id="login_error">${error}</div>` : ''}
-    <form action="/signin/" method="post">
-      <input type="hidden" name="redirect_to" value="/">
-      <input type="text" name="log" placeholder="メールアドレス">
-      <input type="password" name="pwd" placeholder="パスワード">
-      <input type="submit" value="ログイン">
-    </form>`);
-
-// アカウントごとに違うポイントを表示して、取り違えていないか確認できるようにする
-const memberTop = (accountNumber) =>
-  page(`
-    <h1>マイページ</h1>
-    <p>ログインボーナスを獲得しました。</p>
-    <p>保有ポイント ${accountNumber * 100} pt</p>
-    <a href="/logout">ログアウト</a>`);
-
-function startServer() {
-  const server = http.createServer((req, res) => {
-    const session = (req.headers.cookie || '').match(/mock_session=(\d+)/);
-    const loggedIn = Boolean(session);
-    const accountNumber = session ? Number(session[1]) : 0;
-
-    if (req.method === 'POST' && req.url.startsWith('/signin')) {
-      let body = '';
-      req.on('data', (chunk) => {
-        body += chunk;
-      });
-      req.on('end', () => {
-        const params = new URLSearchParams(body);
-        const matched = ACCOUNTS.findIndex(
-          (a) => a.email === params.get('log') && a.password === params.get('pwd'),
-        );
-        if (matched >= 0) {
-          res.writeHead(302, {
-            location: '/mypage/',
-            'set-cookie': `mock_session=${matched + 1}; Path=/`,
-          });
-          res.end();
-        } else {
-          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-          res.end(loginForm('ID またはパスワードが違います。'));
-        }
-      });
-      return;
-    }
-
-    if (req.url.startsWith('/signin')) {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(loggedIn ? memberTop(accountNumber) : loginForm(null));
-      return;
-    }
-
-    if (!loggedIn) {
-      res.writeHead(302, { location: '/signin/' });
-      res.end();
-      return;
-    }
-
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(memberTop(accountNumber));
-  });
-
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server));
-  });
-}
 
 function runLogin(env) {
   return new Promise((resolve) => {
@@ -123,18 +42,13 @@ const baseEnv = {
   URAWA_RETRIES: '1',
 };
 
-let failures = 0;
-
-function check(condition, label) {
-  console.log(`${condition ? 'PASS' : 'FAIL'}: ${label}`);
-  if (!condition) failures += 1;
-}
+const { state, check } = createChecker();
 
 // 1) 2 アカウントとも正しい → 両方成功して終了コード 0
 const both = await runLogin({
   ...baseEnv,
   URAWA_EMAIL: ACCOUNTS[0].email,
-  URAWA_PASSWORD: ACCOUNTS[0].password,
+  URAWA_PASSWORD: SHARED_PASSWORD,
   URAWA_EMAIL_2: ACCOUNTS[1].email,
   URAWA_PASSWORD_2: ACCOUNTS[1].password,
 });
@@ -148,7 +62,7 @@ check(both.output.includes('[アカウント2] ログイン成功'), 'アカウ�
 const partial = await runLogin({
   ...baseEnv,
   URAWA_EMAIL: ACCOUNTS[0].email,
-  URAWA_PASSWORD: ACCOUNTS[0].password,
+  URAWA_PASSWORD: SHARED_PASSWORD,
   URAWA_EMAIL_2: ACCOUNTS[1].email,
   URAWA_PASSWORD_2: 'wrong-password',
 });
@@ -199,5 +113,5 @@ check(
 );
 
 server.close();
-console.log(failures === 0 ? '\nすべてのテストに合格しました。' : `\n${failures} 件のテストが失敗しました。`);
-process.exit(failures === 0 ? 0 : 1);
+console.log(state.failures === 0 ? '\nログインのテストに合格しました。' : `\n${state.failures} 件のテストが失敗しました。`);
+process.exit(state.failures === 0 ? 0 : 1);
