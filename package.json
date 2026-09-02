@@ -1,0 +1,16 @@
+{
+  "name": "urawa-auto-login",
+  "version": "1.0.0",
+  "private": true,
+  "description": "浦和競馬公式ファンクラブへ毎日自動ログインするスクリプト",
+  "type": "module",
+  "scripts": {
+    "login": "node src/login.js",
+    "inspect": "node src/inspect.js",
+    "test": "node test/run-mock-test.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.47.2"
+  }
+}

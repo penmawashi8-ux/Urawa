@@ -1,0 +1,50 @@
+name: 毎日自動ログイン
+
+on:
+  schedule:
+    # GitHub Actions の cron は UTC。JST = UTC+9。
+    - cron: '10 15 * * *' # 00:10 JST（日付が変わってすぐ）
+    - cron: '0 3 * * *' # 12:00 JST（1 回目が失敗・遅延したときの保険）
+  workflow_dispatch: # 手動実行用
+
+concurrency:
+  group: urawa-daily-login
+  cancel-in-progress: false
+
+jobs:
+  login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Chromium をインストール
+        run: npx playwright install --with-deps chromium
+
+      - name: ログイン実行
+        env:
+          URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
+          URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
+        run: npm run login
+
+      # PC がなくても原因が分かるように、失敗時はフォーム構造をログに出しておく
+      - name: 失敗時にログインフォームの構造を出力
+        if: failure()
+        continue-on-error: true
+        run: npm run inspect
+
+      - name: 失敗時のスクリーンショットを保存
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: login-screenshots-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore

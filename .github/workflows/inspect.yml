@@ -1,0 +1,36 @@
+name: ログインフォームを調べる
+
+# 手動実行専用。ログインページのフォーム構造（input の name / id）と
+# CAPTCHA の有無をログに出力する。PC がなくても、Actions の実行ログで確認できる。
+# 認証情報は使わないので、ログインはしない。
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Chromium をインストール
+        run: npx playwright install --with-deps chromium
+
+      - name: フォーム構造を出力
+        run: npm run inspect
+
+      - name: スクリーンショットを保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inspect-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
