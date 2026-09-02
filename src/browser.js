@@ -76,18 +76,4 @@ export async function saveScreenshot(page, label) {
   }
 }
 
-/** Webhook が設定されていれば通知する（Slack / Discord 互換） */
-export async function notify(message) {
-  if (!config.webhookUrl) return;
-  try {
-    await fetch(config.webhookUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: message, content: message }),
-    });
-  } catch (error) {
-    log(`Webhook 通知に失敗: ${error.message}`);
-  }
-}
-
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

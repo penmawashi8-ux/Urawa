@@ -69,7 +69,6 @@ export const config = {
   timeoutMs: Number(process.env.URAWA_TIMEOUT_MS || 30000),
   retries: Number(process.env.URAWA_RETRIES || 3),
   artifactDir: process.env.URAWA_ARTIFACT_DIR || 'artifacts',
-  webhookUrl: process.env.URAWA_WEBHOOK_URL || '',
 
   selectors: {
     user: selectorList(process.env.URAWA_USER_SELECTOR) || DEFAULT_USER_SELECTORS,

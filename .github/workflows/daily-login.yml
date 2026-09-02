@@ -32,7 +32,6 @@ jobs:
         env:
           URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
           URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
-          URAWA_WEBHOOK_URL: ${{ secrets.URAWA_WEBHOOK_URL }}
         run: npm run login
 
       - name: 失敗時のスクリーンショットを保存

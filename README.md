@@ -12,9 +12,8 @@ Playwright（実際の Chromium を動かすブラウザ自動化）でログイ
 1. `https://urawakeiba-funclub.com/signin/` を開く
 2. ログイン ID / パスワードの入力欄を**自動検出**して入力（`input[name="log"]` など、よくあるパターンを順に試す）
 3. 送信 → ログイン成功かどうかを判定（ログアウトリンクの有無・パスワード欄が残っていないか・URL の変化）
-4. トップページを開いて保有ポイントらしき数字をログに出す
-5. スクリーンショットを `artifacts/` に保存
-6. 失敗したら最大 3 回リトライ、それでもダメなら終了コード 1 ＋（設定していれば）Webhook 通知
+4. ログイン後にトップページを開く
+5. 失敗したら最大 3 回リトライ。それでもダメなら終了コード 1 で終了し、そのときの画面を `artifacts/` にスクリーンショット保存
 
 ---
 
@@ -50,14 +49,13 @@ npm test
 2. リポジトリの **Settings → Secrets and variables → Actions → New repository secret** で登録
    - `URAWA_EMAIL` … ログイン ID（メールアドレス）
    - `URAWA_PASSWORD` … パスワード
-   - `URAWA_WEBHOOK_URL` … （任意）失敗時に通知する Slack / Discord の Webhook URL
 3. **Actions** タブ → 「毎日自動ログイン」→ **Run workflow** で手動実行し、成功するか確認
 4. あとは毎日 **00:10 JST** と **12:00 JST** に自動実行されます（1 回目が失敗・遅延したときの保険として 2 回設定しています。二重ログインしても害はありません）
 
 > GitHub Actions の cron は UTC 指定です。時刻を変えたい場合は `.github/workflows/daily-login.yml` の `cron` を「JST − 9 時間」で書き換えてください。
 > また、実行時刻は GitHub の混雑状況で数分〜十数分ずれることがあります。
 
-失敗したときのスクリーンショットは、そのワークフロー実行ページの Artifacts からダウンロードできます。
+失敗するとワークフローが red になり、GitHub から通知メールが届きます（Actions の通知設定に従います）。そのときの画面のスクリーンショットは、実行ページの Artifacts からダウンロードできます。
 
 ---
 
@@ -107,8 +105,8 @@ PC がスリープしていると実行されない点に注意してくださ�
 
 ```
 src/config.js     設定と、入力欄セレクタの候補リスト
-src/browser.js    ブラウザ起動・要素検索・スクショ・通知の共通処理
-src/login.js      ログイン本体（リトライ・成功判定・ポイント読み取り）
+src/browser.js    ブラウザ起動・要素検索・スクショの共通処理
+src/login.js      ログイン本体（成功判定・リトライ）
 src/inspect.js    フォーム構造の調査用
 test/             ローカルのモックサイトを使った動作テスト
 .github/workflows/daily-login.yml  毎日実行するワークフロー

@@ -4,7 +4,6 @@ import {
   findFirstVisible,
   dismissConsentBanner,
   saveScreenshot,
-  notify,
   log,
   sleep,
 } from './browser.js';
@@ -45,20 +44,6 @@ async function readErrorMessage(page) {
   const text = await found.locator.innerText().catch(() => '');
   const trimmed = text.replace(/\s+/g, ' ').trim();
   return trimmed ? trimmed.slice(0, 200) : null;
-}
-
-/** 保有ポイントらしき数字をベストエフォートで拾う（取れなくてもログインは成功扱い） */
-async function readPoints(page) {
-  const body = await page.locator('body').innerText().catch(() => '');
-  const patterns = [
-    /(?:保有|現在の|所持)?\s*ポイント[^0-9]{0,12}([0-9][0-9,]*)/,
-    /([0-9][0-9,]*)\s*(?:pt|Pt|PT|ポイント)/,
-  ];
-  for (const pattern of patterns) {
-    const match = body.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
 }
 
 /** ログインを 1 回試みる */
@@ -126,16 +111,13 @@ async function main() {
 
       log(`ログイン成功: ${page.url()}`);
 
-      // ログインボーナス判定はトップ/マイページ側で行われることがあるので一度開いておく
+      // ログイン後にサイトを一度開く（ログインボーナスの判定がトップ側の場合に備える）
       if (config.homeUrl && !page.url().startsWith(config.homeUrl)) {
+        log(`サイトを開きます: ${config.homeUrl}`);
         await page.goto(config.homeUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
       }
 
-      const points = await readPoints(page);
-      if (points) log(`現在のポイント（推定）: ${points}`);
-
-      await saveScreenshot(page, 'success');
       await browser.close();
 
       log('完了しました。');
@@ -155,9 +137,7 @@ async function main() {
     }
   }
 
-  const message = `浦和競馬ファンクラブへの自動ログインに失敗しました: ${lastError?.message ?? '不明なエラー'}`;
-  log(message);
-  await notify(message);
+  log(`浦和競馬ファンクラブへの自動ログインに失敗しました: ${lastError?.message ?? '不明なエラー'}`);
   return 1;
 }
 

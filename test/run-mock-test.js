@@ -114,13 +114,6 @@ if (ok.code === 0 && ok.output.includes('ログイン成功')) {
   console.log(`FAIL: 正しい認証情報でログインできない (exit=${ok.code})`);
   failures += 1;
 }
-if (ok.output.includes('120')) {
-  console.log('PASS: ポイント数を読み取れる');
-} else {
-  console.log('FAIL: ポイント数を読み取れない');
-  failures += 1;
-}
-
 const ng = await runLogin({ ...baseEnv, URAWA_EMAIL: EMAIL, URAWA_PASSWORD: 'wrong-password' });
 console.log(ng.output);
 if (ng.code === 1 && ng.output.includes('パスワードが違います')) {
