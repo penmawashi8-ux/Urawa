@@ -62,10 +62,14 @@ check(
 const summary = await fs.readFile(path.join(workDir, 'POINTS.md'), 'utf8').catch(() => '');
 check(summary.includes('| アカウント2 | 250 |'), 'POINTS.md を更新する');
 
-// 2) 無効なコード → 全アカウント失敗で終了コード 1
-const ng = await runCoupon(baseEnv, ['WRONGCODE']);
+// 2) 無効なコード → 全アカウント失敗で終了コード 1。拒否は確定なのでリトライしない
+const ng = await runCoupon({ ...baseEnv, URAWA_RETRIES: '3' }, ['WRONGCODE']);
 check(ng.code === 1, '無効なコードなら終了コード 1');
 check(ng.output.includes('クーポンコードが無効です'), 'サイトのエラーメッセージを拾う');
+check(
+  !ng.output.includes('ログイン試行 2/3'),
+  '拒否されたコードは再送信しない（サイトに無駄な負荷をかけない）',
+);
 
 // 3) 使用済みのコード → 使用済みと判定して失敗にする（1 回目で使用済みになっている）
 const used = await runCoupon(baseEnv, [VALID_COUPON]);

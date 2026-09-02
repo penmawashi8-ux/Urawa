@@ -142,6 +142,9 @@ export async function withLogin(account, task) {
       }
       await browser.close();
 
+      // サイト側が明確に拒否した場合（無効なクーポンなど）は繰り返しても無駄
+      if (error.noRetry) break;
+
       if (attempt < config.retries) {
         const waitMs = 5000 * 2 ** (attempt - 1); // 5s, 10s, 20s ...
         log(`[${account.label}] ${waitMs / 1000} 秒待って再試行します。`);
