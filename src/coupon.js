@@ -94,8 +94,12 @@ async function applyCoupon(page, account, code) {
   const message = (await readErrorMessage(page)) || noticeText || firstNotice(body);
   log(`[${account.label}] 送信後のメッセージ: ${message || '（取得できませんでした）'}`);
 
-  const failed = /無効|不正|期限|既に|すでに|使用済|エラー|正しく/.test(message || '');
-  if (failed) throw new Error(`クーポンが受け付けられませんでした: ${message}`);
+  if (/無効|不正|期限|既に|すでに|使用済|エラー|正しく/.test(message || '')) {
+    // サイトが明確に拒否した場合は、何度送っても同じなのでリトライしない
+    const error = new Error(`クーポンが受け付けられませんでした: ${message}`);
+    error.noRetry = true;
+    throw error;
+  }
 
   return readPoints(page, account);
 }
