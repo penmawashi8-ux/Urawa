@@ -57,11 +57,42 @@ const DEFAULT_CONSENT_SELECTORS = [
   '.cookie-accept',
 ];
 
+const MAX_ACCOUNTS = 10;
+
+/**
+ * 環境変数からアカウント一覧を組み立てる。
+ *   1 件目: URAWA_EMAIL      / URAWA_PASSWORD
+ *   2 件目以降: URAWA_EMAIL_2 / URAWA_PASSWORD_2 …（最大 10 件）
+ * 片方だけ設定されている場合は設定漏れとして warnings に入れる。
+ */
+function collectAccounts() {
+  const accounts = [];
+  const warnings = [];
+
+  for (let index = 1; index <= MAX_ACCOUNTS; index += 1) {
+    const suffix = index === 1 ? '' : `_${index}`;
+    const emailKey = `URAWA_EMAIL${suffix}`;
+    const passwordKey = `URAWA_PASSWORD${suffix}`;
+    const email = process.env[emailKey] || '';
+    const password = process.env[passwordKey] || '';
+
+    if (email && password) {
+      accounts.push({ id: `account${index}`, label: `アカウント${index}`, email, password });
+    } else if (email || password) {
+      warnings.push(`${email ? passwordKey : emailKey} が未設定のため、アカウント${index} をスキップします。`);
+    }
+  }
+
+  return { accounts, warnings };
+}
+
+const { accounts, warnings } = collectAccounts();
+
 export const config = {
   loginUrl: process.env.URAWA_LOGIN_URL || 'https://urawakeiba-funclub.com/signin/',
   homeUrl: process.env.URAWA_HOME_URL || 'https://urawakeiba-funclub.com/',
-  email: process.env.URAWA_EMAIL || '',
-  password: process.env.URAWA_PASSWORD || '',
+  accounts,
+  accountWarnings: warnings,
 
   headless: process.env.HEADFUL !== '1',
   // 既存の Chrome / Chromium を使いたい場合のみ指定（未指定なら Playwright 同梱版）
@@ -79,12 +110,9 @@ export const config = {
 };
 
 export function assertCredentials() {
-  const missing = [];
-  if (!config.email) missing.push('URAWA_EMAIL');
-  if (!config.password) missing.push('URAWA_PASSWORD');
-  if (missing.length > 0) {
+  if (config.accounts.length === 0) {
     throw new Error(
-      `${missing.join(', ')} が未設定です。.env（ローカル）または GitHub Secrets に設定してください。`,
+      'URAWA_EMAIL / URAWA_PASSWORD が未設定です。.env（ローカル）または GitHub Secrets に設定してください。',
     );
   }
 }

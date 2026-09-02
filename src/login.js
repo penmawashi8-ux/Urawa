@@ -47,7 +47,7 @@ async function readErrorMessage(page) {
 }
 
 /** ログインを 1 回試みる */
-async function attemptLogin(context) {
+async function attemptLogin(context, account) {
   const page = await context.newPage();
   log(`ログインページを開きます: ${config.loginUrl}`);
   await page.goto(config.loginUrl, { waitUntil: 'domcontentloaded' });
@@ -72,8 +72,8 @@ async function attemptLogin(context) {
   }
 
   log(`入力欄を検出: ID=${userField.selector} / PW=${passField.selector}`);
-  await userField.locator.fill(config.email);
-  await passField.locator.fill(config.password);
+  await userField.locator.fill(account.email);
+  await passField.locator.fill(account.password);
 
   const submit = await findFirstVisible(page, config.selectors.submit);
   if (submit) {
@@ -98,47 +98,71 @@ async function attemptLogin(context) {
   return { page, alreadyLoggedIn: false };
 }
 
-async function main() {
-  assertCredentials();
-
+/** 1 アカウント分のログイン（リトライ込み）。成功したら true */
+async function loginAccount(account) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= config.retries; attempt += 1) {
+    // アカウントごとに新しいブラウザを起動するので、Cookie は混ざらない
     const { browser, context } = await launchBrowser();
     try {
-      log(`ログイン試行 ${attempt}/${config.retries}`);
-      const { page } = await attemptLogin(context);
+      log(`[${account.label}] ログイン試行 ${attempt}/${config.retries}`);
+      const { page } = await attemptLogin(context, account);
 
-      log(`ログイン成功: ${page.url()}`);
+      log(`[${account.label}] ログイン成功: ${page.url()}`);
 
       // ログイン後にサイトを一度開く（ログインボーナスの判定がトップ側の場合に備える）
       if (config.homeUrl && !page.url().startsWith(config.homeUrl)) {
-        log(`サイトを開きます: ${config.homeUrl}`);
+        log(`[${account.label}] サイトを開きます: ${config.homeUrl}`);
         await page.goto(config.homeUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
       }
 
       await browser.close();
-
-      log('完了しました。');
-      return 0;
+      return true;
     } catch (error) {
       lastError = error;
-      log(`失敗: ${error.message}`);
+      log(`[${account.label}] 失敗: ${error.message}`);
       const pages = context.pages();
-      if (pages.length > 0) await saveScreenshot(pages[pages.length - 1], `failure-${attempt}`);
+      if (pages.length > 0) {
+        await saveScreenshot(pages[pages.length - 1], `failure-${account.id}-${attempt}`);
+      }
       await browser.close();
 
       if (attempt < config.retries) {
         const waitMs = 5000 * 2 ** (attempt - 1); // 5s, 10s, 20s ...
-        log(`${waitMs / 1000} 秒待って再試行します。`);
+        log(`[${account.label}] ${waitMs / 1000} 秒待って再試行します。`);
         await sleep(waitMs);
       }
     }
   }
 
-  log(`浦和競馬ファンクラブへの自動ログインに失敗しました: ${lastError?.message ?? '不明なエラー'}`);
-  return 1;
+  log(`[${account.label}] ログインできませんでした: ${lastError?.message ?? '不明なエラー'}`);
+  return false;
+}
+
+async function main() {
+  assertCredentials();
+  config.accountWarnings.forEach((warning) => log(`警告: ${warning}`));
+
+  log(`対象アカウント数: ${config.accounts.length}`);
+  const failed = [];
+
+  for (const account of config.accounts) {
+    const ok = await loginAccount(account);
+    if (!ok) failed.push(account.label);
+  }
+
+  const succeeded = config.accounts.length - failed.length;
+  log(`結果: 成功 ${succeeded} / ${config.accounts.length}`);
+
+  if (failed.length > 0) {
+    log(`失敗したアカウント: ${failed.join(', ')}`);
+    return 1;
+  }
+
+  log('すべてのアカウントでログインできました。');
+  return 0;
 }
 
 const exitCode = await main();
