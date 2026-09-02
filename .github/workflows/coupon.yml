@@ -1,0 +1,72 @@
+name: クーポンコードを入力
+
+# Actions タブから手動で実行する。コードを 1 回入力すれば、全アカウントに反映される。
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: 'クーポンコード（配信で発表されたもの）'
+        required: true
+        type: string
+
+concurrency:
+  group: urawa-account-access
+  cancel-in-progress: false
+
+permissions:
+  contents: write # ポイントの更新をコミットするため
+
+jobs:
+  coupon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Chromium をインストール
+        run: npx playwright install --with-deps chromium
+
+      - name: クーポンコードを入力
+        env:
+          URAWA_COUPON_CODE: ${{ inputs.code }}
+          URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
+          URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
+          URAWA_EMAIL_2: ${{ secrets.URAWA_EMAIL_2 }}
+          URAWA_EMAIL2: ${{ secrets.URAWA_EMAIL2 }}
+          URAWA_PASSWORD_2: ${{ secrets.URAWA_PASSWORD_2 }}
+          URAWA_PASSWORD2: ${{ secrets.URAWA_PASSWORD2 }}
+          URAWA_EMAIL_3: ${{ secrets.URAWA_EMAIL_3 }}
+          URAWA_EMAIL3: ${{ secrets.URAWA_EMAIL3 }}
+          URAWA_PASSWORD_3: ${{ secrets.URAWA_PASSWORD_3 }}
+          URAWA_PASSWORD3: ${{ secrets.URAWA_PASSWORD3 }}
+        run: npm run coupon
+
+      - name: ポイントの更新をコミット
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -z "$(git status --porcelain POINTS.md data/points.json)" ]; then
+            echo "ポイントに変化がないためコミットしません。"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add POINTS.md data/points.json
+          git commit -m "chore: クーポン入力後のポイントを更新"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: 失敗時のスクリーンショットを保存
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coupon-screenshots-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
