@@ -11,6 +11,9 @@ concurrency:
   group: urawa-daily-login
   cancel-in-progress: false
 
+permissions:
+  contents: write # POINTS.md の更新をコミットするため
+
 jobs:
   login:
     runs-on: ubuntu-latest
@@ -44,6 +47,21 @@ jobs:
           URAWA_PASSWORD_3: ${{ secrets.URAWA_PASSWORD_3 }}
           URAWA_PASSWORD3: ${{ secrets.URAWA_PASSWORD3 }}
         run: npm run login
+
+      # ポイントは POINTS.md に書き出しておき、リポジトリのトップから見えるようにする
+      - name: ポイントの更新をコミット
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -z "$(git status --porcelain POINTS.md data/points.json)" ]; then
+            echo "ポイントに変化がないためコミットしません。"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add POINTS.md data/points.json
+          git commit -m "chore: ポイントを更新"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       # PC がなくても原因が分かるように、失敗時はフォーム構造をログに出しておく
       - name: 失敗時にログインフォームの構造を出力

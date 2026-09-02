@@ -1,4 +1,5 @@
 import { config, assertCredentials } from './config.js';
+import { extractPoints, excerptAroundPoints, savePoints } from './points.js';
 import {
   launchBrowser,
   findFirstVisible,
@@ -98,7 +99,27 @@ async function attemptLogin(context, account) {
   return { page, alreadyLoggedIn: false };
 }
 
-/** 1 アカウント分のログイン（リトライ込み）。成功したら true */
+/** マイページを開いて保有ポイントを読む。読めなければ null（ログインの成否には影響しない） */
+async function readPoints(page, account) {
+  try {
+    if (config.pointsUrl && !page.url().startsWith(config.pointsUrl)) {
+      await page.goto(config.pointsUrl, { waitUntil: 'domcontentloaded' });
+      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    }
+    const body = await page.locator('body').innerText();
+    const points = extractPoints(body);
+    if (points) {
+      log(`[${account.label}] 保有ポイント: ${points}`);
+      return points;
+    }
+    log(`[${account.label}] ポイントを読み取れませんでした。ページ抜粋: ${excerptAroundPoints(body)}`);
+  } catch (error) {
+    log(`[${account.label}] ポイントの取得に失敗: ${error.message}`);
+  }
+  return null;
+}
+
+/** 1 アカウント分のログイン（リトライ込み）。{ ok, points } を返す */
 async function loginAccount(account) {
   let lastError = null;
 
@@ -118,8 +139,9 @@ async function loginAccount(account) {
         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
       }
 
+      const points = await readPoints(page, account);
       await browser.close();
-      return true;
+      return { ok: true, points };
     } catch (error) {
       lastError = error;
       log(`[${account.label}] 失敗: ${error.message}`);
@@ -138,7 +160,7 @@ async function loginAccount(account) {
   }
 
   log(`[${account.label}] ログインできませんでした: ${lastError?.message ?? '不明なエラー'}`);
-  return false;
+  return { ok: false, points: null };
 }
 
 async function main() {
@@ -152,14 +174,22 @@ async function main() {
     log(`${shared.join(' / ')} は 1 つ目のパスワード（URAWA_PASSWORD）を使います。`);
   }
   const failed = [];
+  const points = [];
 
   for (const account of config.accounts) {
-    const ok = await loginAccount(account);
-    if (!ok) failed.push(account.label);
+    const result = await loginAccount(account);
+    if (!result.ok) failed.push(account.label);
+    if (result.points !== null) points.push({ label: account.label, points: result.points });
   }
 
   const succeeded = config.accounts.length - failed.length;
   log(`結果: 成功 ${succeeded} / ${config.accounts.length}`);
+
+  if (points.length > 0) {
+    log(`ポイント: ${points.map((p) => `${p.label}=${p.points}`).join(' / ')}`);
+    // POINTS.md / data/points.json を更新する（ワークフローが差分をコミットする）
+    await savePoints(points).catch((error) => log(`ポイントの保存に失敗: ${error.message}`));
+  }
 
   if (failed.length > 0) {
     log(`失敗したアカウント: ${failed.join(', ')}`);
