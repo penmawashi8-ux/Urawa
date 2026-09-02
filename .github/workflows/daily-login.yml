@@ -30,8 +30,13 @@ jobs:
 
       - name: ログイン実行
         env:
+          # 2 件目以降は未登録なら自動的にスキップされる
           URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
           URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
+          URAWA_EMAIL_2: ${{ secrets.URAWA_EMAIL_2 }}
+          URAWA_PASSWORD_2: ${{ secrets.URAWA_PASSWORD_2 }}
+          URAWA_EMAIL_3: ${{ secrets.URAWA_EMAIL_3 }}
+          URAWA_PASSWORD_3: ${{ secrets.URAWA_PASSWORD_3 }}
         run: npm run login
 
       # PC がなくても原因が分かるように、失敗時はフォーム構造をログに出しておく

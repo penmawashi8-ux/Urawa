@@ -9,8 +9,10 @@ import path from 'node:path';
  * （本番サイトにアクセスしないので、何度実行しても安全）
  */
 
-const EMAIL = 'tester@example.com';
-const PASSWORD = 'correct-horse';
+const ACCOUNTS = [
+  { email: 'tester1@example.com', password: 'correct-horse' },
+  { email: 'tester2@example.com', password: 'battery-staple' },
+];
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 const page = (body) =>
@@ -44,7 +46,10 @@ function startServer() {
       });
       req.on('end', () => {
         const params = new URLSearchParams(body);
-        if (params.get('log') === EMAIL && params.get('pwd') === PASSWORD) {
+        const valid = ACCOUNTS.some(
+          (a) => a.email === params.get('log') && a.password === params.get('pwd'),
+        );
+        if (valid) {
           res.writeHead(302, { location: '/', 'set-cookie': 'mock_session=1; Path=/' });
           res.end();
         } else {
@@ -106,22 +111,50 @@ const baseEnv = {
 
 let failures = 0;
 
-const ok = await runLogin({ ...baseEnv, URAWA_EMAIL: EMAIL, URAWA_PASSWORD: PASSWORD });
-console.log(ok.output);
-if (ok.code === 0 && ok.output.includes('ログイン成功')) {
-  console.log('PASS: 正しい認証情報でログインできる');
-} else {
-  console.log(`FAIL: 正しい認証情報でログインできない (exit=${ok.code})`);
-  failures += 1;
+function check(condition, label) {
+  console.log(`${condition ? 'PASS' : 'FAIL'}: ${label}`);
+  if (!condition) failures += 1;
 }
-const ng = await runLogin({ ...baseEnv, URAWA_EMAIL: EMAIL, URAWA_PASSWORD: 'wrong-password' });
-console.log(ng.output);
-if (ng.code === 1 && ng.output.includes('パスワードが違います')) {
-  console.log('PASS: 認証エラーを検知して終了コード 1 になる');
-} else {
-  console.log(`FAIL: 認証エラーを検知できない (exit=${ng.code})`);
-  failures += 1;
-}
+
+// 1) 2 アカウントとも正しい → 両方成功して終了コード 0
+const both = await runLogin({
+  ...baseEnv,
+  URAWA_EMAIL: ACCOUNTS[0].email,
+  URAWA_PASSWORD: ACCOUNTS[0].password,
+  URAWA_EMAIL_2: ACCOUNTS[1].email,
+  URAWA_PASSWORD_2: ACCOUNTS[1].password,
+});
+console.log(both.output);
+check(both.code === 0, '2 アカウントとも成功して終了コード 0');
+check(both.output.includes('対象アカウント数: 2'), '2 アカウントを認識する');
+check(both.output.includes('[アカウント1] ログイン成功'), 'アカウント1 がログインできる');
+check(both.output.includes('[アカウント2] ログイン成功'), 'アカウント2 がログインできる');
+
+// 2) 2 件目だけパスワードが誤り → 1 件目は成功したうえで終了コード 1
+const partial = await runLogin({
+  ...baseEnv,
+  URAWA_EMAIL: ACCOUNTS[0].email,
+  URAWA_PASSWORD: ACCOUNTS[0].password,
+  URAWA_EMAIL_2: ACCOUNTS[1].email,
+  URAWA_PASSWORD_2: 'wrong-password',
+});
+console.log(partial.output);
+check(partial.code === 1, '1 件でも失敗したら終了コード 1');
+check(partial.output.includes('[アカウント1] ログイン成功'), '失敗があっても他アカウントは処理される');
+check(partial.output.includes('結果: 成功 1 / 2'), '成功／失敗の件数を集計する');
+check(partial.output.includes('パスワードが違います'), 'サイト側のエラーメッセージを拾う');
+
+// 3) 3 件目のメールだけ設定 → 設定漏れを警告してスキップ
+const partialEnv = await runLogin({
+  ...baseEnv,
+  URAWA_EMAIL: ACCOUNTS[0].email,
+  URAWA_PASSWORD: ACCOUNTS[0].password,
+  URAWA_EMAIL_3: 'nopassword@example.com',
+});
+check(
+  partialEnv.code === 0 && partialEnv.output.includes('URAWA_PASSWORD_3 が未設定'),
+  '片方だけの設定は警告してスキップする',
+);
 
 server.close();
 console.log(failures === 0 ? '\nすべてのテストに合格しました。' : `\n${failures} 件のテストが失敗しました。`);

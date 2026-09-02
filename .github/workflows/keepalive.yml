@@ -1,0 +1,37 @@
+name: スケジュール維持
+
+# GitHub は「リポジトリに 60 日間なにも活動がない」とスケジュール実行を自動停止する。
+# 月 2 回ダミーコミットを入れて活動を作り、停止させないためのワークフロー。
+# 併せて、万一停止されていた場合に備えて毎日ログインのワークフローを有効化し直す。
+on:
+  schedule:
+    - cron: '30 18 1,15 * *' # 毎月 1 日と 15 日の 03:30 JST
+  workflow_dispatch:
+
+permissions:
+  contents: write # ダミーコミットの push 用
+  actions: write # ワークフローの再有効化用
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: タイムスタンプを更新してコミット
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .keepalive
+          git commit -m "chore: keepalive $(cat .keepalive)"
+          git push
+
+      - name: 毎日自動ログインのワークフローを有効化し直す
+        continue-on-error: true # すでに有効なら 403 が返ることがあるが問題ない
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method PUT "repos/${{ github.repository }}/actions/workflows/daily-login.yml/enable"
+          gh api --method PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable"
