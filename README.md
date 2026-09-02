@@ -36,16 +36,18 @@ PC は不要です。ブラウザで GitHub を開いて操作してください
 
 ### アカウントを増やす
 
-Secrets を追加するだけです（コードの変更は不要）。**番号は 1 から連番で埋めてください**（`_2` を飛ばして `_3` だけ登録すると、`_3` は読み込まれません）。
+Secrets を追加するだけです（コードの変更は不要）。
 
 | アカウント | Secret 名 |
 | --- | --- |
 | 1 つ目 | `URAWA_EMAIL` / `URAWA_PASSWORD` |
-| 2 つ目 | `URAWA_EMAIL_2` / `URAWA_PASSWORD_2` |
-| 3 つ目 | `URAWA_EMAIL_3` / `URAWA_PASSWORD_3` |
+| 2 つ目 | `URAWA_EMAIL_2`（`URAWA_EMAIL2` でも可） / `URAWA_PASSWORD_2` |
+| 3 つ目 | `URAWA_EMAIL_3`（`URAWA_EMAIL3` でも可） / `URAWA_PASSWORD_3` |
 
-3 つ目まではワークフローに配線済みです。4 つ目以降を使う場合は `.github/workflows/daily-login.yml` の `env:` に `URAWA_EMAIL_4` / `URAWA_PASSWORD_4` … を足してください（スクリプト側は 10 件まで対応）。
-未登録の番号は自動的にスキップされます。メールだけ登録してパスワードを忘れている、といった設定漏れはログに警告が出ます。
+- **パスワードが全アカウント共通なら、番号付きのパスワードは登録不要**です。`URAWA_PASSWORD` が自動的に使われます（ログにその旨が出ます）
+- Secret 名は `_` ありでも無し（`URAWA_EMAIL2`）でも構いません
+- 未登録の番号は自動的にスキップされます。パスワードだけ登録してメールを忘れている、といった設定漏れはログに警告が出ます
+- 3 つ目まではワークフローに配線済み。4 つ目以降を使う場合は `.github/workflows/daily-login.yml` の `env:` に `URAWA_EMAIL_4` … を足してください（スクリプト側は 10 件まで対応）
 
 失敗するとワークフローが red になり、GitHub から通知メールが届きます（Actions の通知設定に従います）。そのときの画面のスクリーンショットは、実行ページの Artifacts からダウンロードできます。
 

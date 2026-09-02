@@ -146,6 +146,11 @@ async function main() {
   config.accountWarnings.forEach((warning) => log(`警告: ${warning}`));
 
   log(`対象アカウント数: ${config.accounts.length}`);
+
+  const shared = config.accounts.filter((a) => a.sharedPassword).map((a) => a.label);
+  if (shared.length > 0) {
+    log(`${shared.join(' / ')} は 1 つ目のパスワード（URAWA_PASSWORD）を使います。`);
+  }
   const failed = [];
 
   for (const account of config.accounts) {
