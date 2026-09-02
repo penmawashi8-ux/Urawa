@@ -34,6 +34,12 @@ jobs:
           URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
         run: npm run login
 
+      # PC がなくても原因が分かるように、失敗時はフォーム構造をログに出しておく
+      - name: 失敗時にログインフォームの構造を出力
+        if: failure()
+        continue-on-error: true
+        run: npm run inspect
+
       - name: 失敗時のスクリーンショットを保存
         if: failure()
         uses: actions/upload-artifact@v4

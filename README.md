@@ -17,40 +17,19 @@ Playwright（実際の Chromium を動かすブラウザ自動化）でログイ
 
 ---
 
-## セットアップ（まずローカルで動作確認）
+## セットアップ（スマホだけで完結します）
 
-```bash
-npm install
-npx playwright install chromium
+PC は不要です。ブラウザで GitHub を開いて操作してください（GitHub モバイルアプリでは Secrets の設定ができないので、**ブラウザで github.com を開く**のがポイント。表示が崩れるときはブラウザの「デスクトップ用サイト」表示に切り替えてください）。
 
-cp .env.example .env
-# .env に URAWA_EMAIL / URAWA_PASSWORD を記入
-
-npm run login
-```
-
-`ログイン成功` と出れば OK です。画面を見ながら確認したいときは:
-
-```bash
-HEADFUL=1 npm run login
-```
-
-ローカルサイトを立てた動作テスト（本番サイトにはアクセスしません）:
-
-```bash
-npm test
-```
-
----
-
-## GitHub Actions で毎日自動実行する
-
-1. このリポジトリを GitHub に push
-2. リポジトリの **Settings → Secrets and variables → Actions → New repository secret** で登録
+1. このリポジトリの **Settings → Secrets and variables → Actions → New repository secret** で 2 つ登録
    - `URAWA_EMAIL` … ログイン ID（メールアドレス）
    - `URAWA_PASSWORD` … パスワード
-3. **Actions** タブ → 「毎日自動ログイン」→ **Run workflow** で手動実行し、成功するか確認
-4. あとは毎日 **00:10 JST** と **12:00 JST** に自動実行されます（1 回目が失敗・遅延したときの保険として 2 回設定しています。二重ログインしても害はありません）
+2. **Actions** タブ → 左の「毎日自動ログイン」→ **Run workflow** で手動実行
+3. 実行結果が緑（成功）なら完了。あとは毎日 **00:10 JST** と **12:00 JST** に自動実行されます
+   （1 回目が失敗・遅延したときの保険で 2 回。二重にログインしても害はありません）
+
+> GitHub Actions の cron は UTC 指定です。時刻を変えたい場合は `.github/workflows/daily-login.yml` の `cron` を「JST − 9 時間」で書き換えてください。
+> また、実行時刻は GitHub の混雑状況で数分〜十数分ずれることがあります。
 
 > GitHub Actions の cron は UTC 指定です。時刻を変えたい場合は `.github/workflows/daily-login.yml` の `cron` を「JST − 9 時間」で書き換えてください。
 > また、実行時刻は GitHub の混雑状況で数分〜十数分ずれることがあります。
@@ -61,40 +40,49 @@ npm test
 
 ## 入力欄の自動検出が外れた場合
 
-サイトのフォーム構造が想定と違うと「パスワード入力欄が見つかりませんでした」で止まります。その場合は調査コマンドでフォームの中身を出力してください。
+サイトのフォーム構造が想定と違うと「パスワード入力欄が見つかりませんでした」で止まります。
+その場合、**失敗したワークフローの実行ログに、ログインフォームの中身（input の `name` / `id`、CAPTCHA の有無）が自動で出力されます**。Actions の該当実行を開いて「失敗時にログインフォームの構造を出力」のログを見てください。
 
-```bash
-npm run inspect
-```
+いつでも手動で調べたいときは、**Actions → 「ログインフォームを調べる」→ Run workflow**（認証情報を使わないので安全です）。
 
-`name` や `id`、CAPTCHA の有無が表示されるので、`.env`（GitHub 側なら Secrets ではなくワークフローの `env`）でセレクタを指定します。
+出てきた `name` / `id` に合わせて、`.github/workflows/daily-login.yml` の「ログイン実行」ステップの `env:` に追記すれば、検出結果を上書きできます。
 
-```bash
-URAWA_USER_SELECTOR=input[name="log"]
-URAWA_PASS_SELECTOR=input[name="pwd"]
-URAWA_SUBMIT_SELECTOR=input[type="submit"]
+```yaml
+      - name: ログイン実行
+        env:
+          URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
+          URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
+          URAWA_USER_SELECTOR: 'input[name="log"]'
+          URAWA_PASS_SELECTOR: 'input[name="pwd"]'
+          URAWA_SUBMIT_SELECTOR: 'input[type="submit"]'
+        run: npm run login
 ```
 
 ---
 
-## PC のスケジューラで動かす場合
+## PC がある場合（任意）
 
-GitHub Actions を使わず、自宅 PC で回すこともできます。
+ローカルで動かして確認することもできます。
 
-- **macOS / Linux（crontab）** — 毎日 0:10 に実行:
-  ```
-  10 0 * * * cd /path/to/Urawa && /usr/bin/env node src/login.js >> cron.log 2>&1
-  ```
-- **Windows** — タスクスケジューラで `node src/login.js` を作業ディレクトリ指定で登録
+```bash
+npm install && npx playwright install chromium
+cp .env.example .env   # URAWA_EMAIL / URAWA_PASSWORD を記入
+npm run login          # HEADFUL=1 を付けるとブラウザ画面が見えます
+npm test               # モックサイトを使った動作テスト（本番にはアクセスしません）
+```
 
-PC がスリープしていると実行されない点に注意してください。
+crontab（macOS / Linux）で回す場合の例:
+
+```
+10 0 * * * cd /path/to/Urawa && /usr/bin/env node src/login.js >> cron.log 2>&1
+```
 
 ---
 
 ## 注意事項
 
-- **CAPTCHA や 2 段階認証が入ると自動ログインはできません。** `npm run inspect` の CAPTCHA 判定で確認できます（現状は未確認 — 実際のページにアクセスできる環境で一度実行してください）。
-- **アクセス元 IP**: GitHub Actions のランナーは海外 IP です。サイト側が海外からのログインを弾く場合は、PC のスケジューラや国内 VPS、セルフホストランナーで動かしてください。
+- **CAPTCHA や 2 段階認証が入ると自動ログインはできません。** 「ログインフォームを調べる」ワークフローの CAPTCHA 判定で確認できます（実サイトでは未確認のため、まずこれを実行するのが確実です）。
+- **アクセス元 IP**: GitHub Actions のランナーは海外 IP です。サイト側が海外からのログインを弾く場合は、国内 VPS やセルフホストランナー、PC のスケジューラで動かす必要があります。
 - **60 日ルール**: GitHub の仕様で、リポジトリに 60 日間コミットなどの活動がないとスケジュール実行が自動停止します。停止したら Actions タブから再有効化してください。
 - **パスワードの扱い**: `.env` は `.gitignore` 済みです。GitHub では必ず Secrets を使い、ソースやログに直接書かないでください（スクリプトはパスワードをログ出力しません）。
 - 自分のアカウントへのログインを自動化するものです。サイトの利用規約が自動化を禁じていないか確認のうえ、自己責任でご利用ください。アクセスは 1 日数回だけで、サイトに負荷はかけません。
@@ -110,4 +98,5 @@ src/login.js      ログイン本体（成功判定・リトライ）
 src/inspect.js    フォーム構造の調査用
 test/             ローカルのモックサイトを使った動作テスト
 .github/workflows/daily-login.yml  毎日実行するワークフロー
+.github/workflows/inspect.yml      フォーム構造を手動で調べるワークフロー
 ```
