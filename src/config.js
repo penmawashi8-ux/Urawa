@@ -59,28 +59,52 @@ const DEFAULT_CONSENT_SELECTORS = [
 
 const MAX_ACCOUNTS = 10;
 
+/** 複数の環境変数名のうち、最初に値が入っているものを返す */
+function envValue(...keys) {
+  for (const key of keys) {
+    if (process.env[key]) return process.env[key];
+  }
+  return '';
+}
+
 /**
  * 環境変数からアカウント一覧を組み立てる。
- *   1 件目: URAWA_EMAIL      / URAWA_PASSWORD
- *   2 件目以降: URAWA_EMAIL_2 / URAWA_PASSWORD_2 …（最大 10 件）
- * 片方だけ設定されている場合は設定漏れとして warnings に入れる。
+ *   1 件目: URAWA_EMAIL / URAWA_PASSWORD
+ *   2 件目以降: URAWA_EMAIL_2 / URAWA_PASSWORD_2（URAWA_EMAIL2 のように "_" なしでも可）
+ * 番号付きのパスワードが無い場合は 1 件目のパスワードを使う（全アカウント同じパスワードのケース）。
+ * メールアドレスが無いのにパスワードだけある場合は、設定漏れとして warnings に入れる。
  */
 function collectAccounts() {
   const accounts = [];
   const warnings = [];
+  const basePassword = process.env.URAWA_PASSWORD || '';
 
   for (let index = 1; index <= MAX_ACCOUNTS; index += 1) {
-    const suffix = index === 1 ? '' : `_${index}`;
-    const emailKey = `URAWA_EMAIL${suffix}`;
-    const passwordKey = `URAWA_PASSWORD${suffix}`;
-    const email = process.env[emailKey] || '';
-    const password = process.env[passwordKey] || '';
+    const email =
+      index === 1 ? process.env.URAWA_EMAIL || '' : envValue(`URAWA_EMAIL_${index}`, `URAWA_EMAIL${index}`);
+    const ownPassword =
+      index === 1 ? basePassword : envValue(`URAWA_PASSWORD_${index}`, `URAWA_PASSWORD${index}`);
+    const password = ownPassword || basePassword;
 
-    if (email && password) {
-      accounts.push({ id: `account${index}`, label: `アカウント${index}`, email, password });
-    } else if (email || password) {
-      warnings.push(`${email ? passwordKey : emailKey} が未設定のため、アカウント${index} をスキップします。`);
+    if (!email) {
+      if (ownPassword && index > 1) {
+        warnings.push(`URAWA_EMAIL_${index} が未設定のため、アカウント${index} をスキップします。`);
+      }
+      continue;
     }
+
+    if (!password) {
+      warnings.push(`アカウント${index} のパスワードが未設定のためスキップします。`);
+      continue;
+    }
+
+    accounts.push({
+      id: `account${index}`,
+      label: `アカウント${index}`,
+      email,
+      password,
+      sharedPassword: index > 1 && !ownPassword,
+    });
   }
 
   return { accounts, warnings };

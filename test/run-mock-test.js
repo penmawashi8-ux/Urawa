@@ -9,9 +9,12 @@ import path from 'node:path';
  * （本番サイトにアクセスしないので、何度実行しても安全）
  */
 
+// 3 アカウントとも同じパスワード（利用者の実際の設定に合わせている）
+const SHARED_PASSWORD = 'correct-horse';
 const ACCOUNTS = [
-  { email: 'tester1@example.com', password: 'correct-horse' },
-  { email: 'tester2@example.com', password: 'battery-staple' },
+  { email: 'tester1@example.com', password: SHARED_PASSWORD },
+  { email: 'tester2@example.com', password: SHARED_PASSWORD },
+  { email: 'tester3@example.com', password: SHARED_PASSWORD },
 ];
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -144,16 +147,32 @@ check(partial.output.includes('[アカウント1] ログイン成功'), '失敗�
 check(partial.output.includes('結果: 成功 1 / 2'), '成功／失敗の件数を集計する');
 check(partial.output.includes('パスワードが違います'), 'サイト側のエラーメッセージを拾う');
 
-// 3) 3 件目のメールだけ設定 → 設定漏れを警告してスキップ
-const partialEnv = await runLogin({
+// 3) 実際の Secrets 設定と同じ形: "_" なしのメール 2 件＋パスワードは 1 つだけ
+const sharedPassword = await runLogin({
   ...baseEnv,
   URAWA_EMAIL: ACCOUNTS[0].email,
-  URAWA_PASSWORD: ACCOUNTS[0].password,
-  URAWA_EMAIL_3: 'nopassword@example.com',
+  URAWA_PASSWORD: SHARED_PASSWORD,
+  URAWA_EMAIL2: ACCOUNTS[1].email,
+  URAWA_EMAIL3: ACCOUNTS[2].email,
+});
+console.log(sharedPassword.output);
+check(sharedPassword.output.includes('対象アカウント数: 3'), '"_" なしの環境変数名も認識する');
+check(
+  sharedPassword.output.includes('アカウント2 / アカウント3 は 1 つ目のパスワード'),
+  '番号付きパスワードが無ければ 1 つ目のパスワードを使う',
+);
+check(sharedPassword.code === 0 && sharedPassword.output.includes('結果: 成功 3 / 3'), '3 アカウントともログインできる');
+
+// 4) メールが無いのにパスワードだけある → 設定漏れとして警告しスキップ
+const orphanPassword = await runLogin({
+  ...baseEnv,
+  URAWA_EMAIL: ACCOUNTS[0].email,
+  URAWA_PASSWORD: SHARED_PASSWORD,
+  URAWA_PASSWORD_2: 'no-email-for-this',
 });
 check(
-  partialEnv.code === 0 && partialEnv.output.includes('URAWA_PASSWORD_3 が未設定'),
-  '片方だけの設定は警告してスキップする',
+  orphanPassword.code === 0 && orphanPassword.output.includes('URAWA_EMAIL_2 が未設定'),
+  'メールだけ無い場合は警告してスキップする',
 );
 
 server.close();
