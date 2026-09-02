@@ -115,6 +115,8 @@ const { accounts, warnings } = collectAccounts();
 export const config = {
   loginUrl: process.env.URAWA_LOGIN_URL || 'https://urawakeiba-funclub.com/signin/',
   homeUrl: process.env.URAWA_HOME_URL || 'https://urawakeiba-funclub.com/',
+  // 保有ポイントを読みに行くページ（ログイン後のリダイレクト先）
+  pointsUrl: process.env.URAWA_POINTS_URL || 'https://urawakeiba-funclub.com/mypage/',
   accounts,
   accountWarnings: warnings,
 

@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -32,15 +33,19 @@ const loginForm = (error) =>
       <input type="submit" value="ログイン">
     </form>`);
 
-const memberTop = page(`
+// アカウントごとに違うポイントを表示して、取り違えていないか確認できるようにする
+const memberTop = (accountNumber) =>
+  page(`
     <h1>マイページ</h1>
     <p>ログインボーナスを獲得しました。</p>
-    <p>保有ポイント 120 pt</p>
+    <p>保有ポイント ${accountNumber * 100} pt</p>
     <a href="/logout">ログアウト</a>`);
 
 function startServer() {
   const server = http.createServer((req, res) => {
-    const loggedIn = (req.headers.cookie || '').includes('mock_session=1');
+    const session = (req.headers.cookie || '').match(/mock_session=(\d+)/);
+    const loggedIn = Boolean(session);
+    const accountNumber = session ? Number(session[1]) : 0;
 
     if (req.method === 'POST' && req.url.startsWith('/signin')) {
       let body = '';
@@ -49,11 +54,14 @@ function startServer() {
       });
       req.on('end', () => {
         const params = new URLSearchParams(body);
-        const valid = ACCOUNTS.some(
+        const matched = ACCOUNTS.findIndex(
           (a) => a.email === params.get('log') && a.password === params.get('pwd'),
         );
-        if (valid) {
-          res.writeHead(302, { location: '/', 'set-cookie': 'mock_session=1; Path=/' });
+        if (matched >= 0) {
+          res.writeHead(302, {
+            location: '/mypage/',
+            'set-cookie': `mock_session=${matched + 1}; Path=/`,
+          });
           res.end();
         } else {
           res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -65,7 +73,7 @@ function startServer() {
 
     if (req.url.startsWith('/signin')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(loggedIn ? memberTop : loginForm(null));
+      res.end(loggedIn ? memberTop(accountNumber) : loginForm(null));
       return;
     }
 
@@ -76,7 +84,7 @@ function startServer() {
     }
 
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(memberTop);
+    res.end(memberTop(accountNumber));
   });
 
   return new Promise((resolve) => {
@@ -105,10 +113,13 @@ function runLogin(env) {
 const server = await startServer();
 const { port } = server.address();
 const base = `http://127.0.0.1:${port}`;
+const workDir = path.join(rootDir, 'artifacts', 'test');
 const baseEnv = {
   URAWA_LOGIN_URL: `${base}/signin/`,
   URAWA_HOME_URL: `${base}/`,
-  URAWA_ARTIFACT_DIR: path.join(rootDir, 'artifacts', 'test'),
+  URAWA_POINTS_URL: `${base}/mypage/`,
+  URAWA_ARTIFACT_DIR: workDir,
+  URAWA_DATA_DIR: workDir, // POINTS.md をリポジトリ直下に書かないようにする
   URAWA_RETRIES: '1',
 };
 
@@ -162,6 +173,18 @@ check(
   '番号付きパスワードが無ければ 1 つ目のパスワードを使う',
 );
 check(sharedPassword.code === 0 && sharedPassword.output.includes('結果: 成功 3 / 3'), '3 アカウントともログインできる');
+check(
+  sharedPassword.output.includes('ポイント: アカウント1=100 / アカウント2=200 / アカウント3=300'),
+  'アカウントごとのポイントを取り違えずに読み取る',
+);
+
+const summary = await fs.readFile(path.join(workDir, 'POINTS.md'), 'utf8').catch(() => '');
+check(
+  summary.includes('| アカウント2 | 200 |') && summary.includes('# 保有ポイント'),
+  'POINTS.md にポイント一覧を書き出す',
+);
+const stored = JSON.parse(await fs.readFile(path.join(workDir, 'data', 'points.json'), 'utf8').catch(() => '{}'));
+check(stored.latest?.アカウント3 === '300', 'data/points.json に最新値を保存する');
 
 // 4) メールが無いのにパスワードだけある → 設定漏れとして警告しスキップ
 const orphanPassword = await runLogin({
