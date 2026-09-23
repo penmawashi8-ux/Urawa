@@ -1,0 +1,73 @@
+name: ポイント付与 URL を開く
+
+# QR コードから読み取った URL を、全アカウントのログイン状態で開く。
+# Actions タブから手動で実行する。
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'ポイント付与 URL（QR コードの中身）'
+        required: true
+        type: string
+
+concurrency:
+  group: urawa-account-access
+  cancel-in-progress: false
+
+permissions:
+  contents: write # ポイントの更新をコミットするため
+
+jobs:
+  visit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Chromium をインストール
+        run: npx playwright install --with-deps chromium
+
+      - name: URL を開く
+        env:
+          URAWA_VISIT_URL: ${{ inputs.url }}
+          URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
+          URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
+          URAWA_EMAIL_2: ${{ secrets.URAWA_EMAIL_2 }}
+          URAWA_EMAIL2: ${{ secrets.URAWA_EMAIL2 }}
+          URAWA_PASSWORD_2: ${{ secrets.URAWA_PASSWORD_2 }}
+          URAWA_PASSWORD2: ${{ secrets.URAWA_PASSWORD2 }}
+          URAWA_EMAIL_3: ${{ secrets.URAWA_EMAIL_3 }}
+          URAWA_EMAIL3: ${{ secrets.URAWA_EMAIL3 }}
+          URAWA_PASSWORD_3: ${{ secrets.URAWA_PASSWORD_3 }}
+          URAWA_PASSWORD3: ${{ secrets.URAWA_PASSWORD3 }}
+        run: npm run visit
+
+      - name: ポイントの更新をコミット
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -z "$(git status --porcelain POINTS.md data/points.json)" ]; then
+            echo "ポイントに変化がないためコミットしません。"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add POINTS.md data/points.json
+          git commit -m "chore: URL 付与後のポイントを更新"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: 失敗時のスクリーンショットを保存
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visit-screenshots-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore

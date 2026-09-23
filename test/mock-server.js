@@ -13,6 +13,9 @@ export const ACCOUNTS = [
 ];
 export const VALID_COUPON = 'URAWA2026';
 const COUPON_BONUS = 50;
+// QR コードから読み取る URL 形式のポイント付与（来場ポイントなど）
+export const VALID_VISIT_TOKEN = 'abc123token';
+const VISIT_BONUS = 50;
 
 const page = (body) =>
   `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>モックファンクラブ</title></head><body>${body}</body></html>`;
@@ -59,9 +62,11 @@ function readBody(req) {
 }
 
 export function startServer() {
-  // アカウント番号 → クーポンで加算されたポイント
+  // アカウント番号 → クーポン / URL で加算されたポイント
   const bonuses = new Map();
-  const pointsOf = (accountNumber) => accountNumber * 100 + (bonuses.get(accountNumber) || 0);
+  const visitBonuses = new Map();
+  const pointsOf = (accountNumber) =>
+    accountNumber * 100 + (bonuses.get(accountNumber) || 0) + (visitBonuses.get(accountNumber) || 0);
 
   const server = http.createServer(async (req, res) => {
     const session = (req.headers.cookie || '').match(/mock_session=(\d+)/);
@@ -113,6 +118,20 @@ export function startServer() {
       }
       bonuses.set(accountNumber, COUPON_BONUS);
       html(memberTop(pointsOf(accountNumber), `${COUPON_BONUS}ポイントを付与しました。`));
+      return;
+    }
+
+    // QR コードの URL（/coupon2/<token>/）を開くとポイントが付与される
+    if (req.url.startsWith('/coupon2/')) {
+      const token = req.url.split('/').filter(Boolean)[1];
+      if (token !== VALID_VISIT_TOKEN) {
+        html(page('<h1>エラー</h1><div class="error">この URL は無効です。</div>'));
+      } else if (visitBonuses.has(accountNumber)) {
+        html(memberTop(pointsOf(accountNumber), 'このURLはすでに使用済みです。'));
+      } else {
+        visitBonuses.set(accountNumber, VISIT_BONUS);
+        html(memberTop(pointsOf(accountNumber), `${VISIT_BONUS}ポイントを付与しました。`));
+      }
       return;
     }
 
