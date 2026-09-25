@@ -1,0 +1,22 @@
+name: ページ調査（一時）
+on:
+  push:
+    branches: [ci-test]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: アンケートページを調査
+        env:
+          URAWA_INSPECT_URL: https://urawakeiba-funclub.com/survey202609/
+          URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
+          URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
+        run: npm run inspect:url
