@@ -58,6 +58,17 @@ const forms = await page.evaluate(() =>
 
 console.log(`\n===== フォーム数: ${forms.length} =====`);
 
+// プルダウンの選択肢と、必須項目を確認する
+const selects = forms.flatMap((f) => f.fields.filter((x) => x.tag === 'select'));
+console.log('\n===== プルダウン =====');
+for (const s of selects) {
+  console.log(`name=${s.name}${s.required ? ' [必須]' : ''}`);
+  console.log(`  ${(s.options || []).map((o) => o.text).join(' / ')}`);
+}
+const required = forms.flatMap((f) => f.fields.filter((x) => x.required).map((x) => x.name));
+console.log('\n===== 必須の入力欄 =====');
+console.log([...new Set(required)].join(', ') || '(required 属性は無し)');
+
 // 設問と選択肢を、入力欄の name 単位でまとめて一覧にする
 const questions = await page.evaluate(() => {
   const groups = new Map();
