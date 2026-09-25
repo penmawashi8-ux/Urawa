@@ -163,6 +163,40 @@ async function fillSurvey(page, account) {
   log(`[${account.label}] 入力内容:`);
   chosen.forEach((line) => log(`    ${line}`));
 
+  // 送信前に、まだ何も入力されていない項目を洗い出す
+  const empty = await page.evaluate(() => {
+    const groups = new Map();
+    for (const el of document.querySelectorAll('input, select, textarea')) {
+      if (['hidden', 'submit', 'button'].includes(el.type)) continue;
+      const name = el.getAttribute('name') || `(名前なし:${el.type || el.tagName})`;
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(el);
+    }
+    const result = [];
+    for (const [name, els] of groups) {
+      const filled = els.some((el) =>
+        el.type === 'radio' || el.type === 'checkbox' ? el.checked : String(el.value || '').trim() !== '',
+      );
+      if (filled) continue;
+      // 画面に表示されている項目だけを対象にする（条件表示で隠れているものは除く）
+      const visible = els.some((el) => el.offsetParent !== null || el.getClientRects().length > 0);
+      let heading = null;
+      let node = els[0];
+      for (let i = 0; i < 5 && node; i += 1) {
+        const text = (node.innerText || node.parentElement?.innerText || '').trim().split('\n')[0];
+        if (text && text.length > 4) { heading = text.slice(0, 60); break; }
+        node = node.parentElement;
+      }
+      result.push({ name, type: els[0].type || els[0].tagName.toLowerCase(), visible, heading });
+    }
+    return result;
+  });
+
+  log(`[${account.label}] 未入力の項目 (${empty.length} 件):`);
+  empty.forEach((e) =>
+    log(`    ${e.visible ? '表示中' : '非表示'} ${e.name} (${e.type}) ${e.heading ? `… ${e.heading}` : ''}`),
+  );
+
   await saveScreenshot(page, `survey-${account.id}-${SUBMIT ? 'submit' : 'dryrun'}`);
 
   if (!SUBMIT) {
