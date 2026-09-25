@@ -16,7 +16,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: アンケートに入力
         env:
-          URAWA_SURVEY_SUBMIT: ''
+          URAWA_SURVEY_SUBMIT: '1'
           URAWA_SURVEY_ACCOUNTS: account2
           URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
           URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}

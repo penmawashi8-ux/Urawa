@@ -148,16 +148,12 @@ async function fillSurvey(page, account) {
   // 推奨度は 0〜10 点しか無く「分からない」が無いため、中央の 5 点を選ぶ
   await choose(page, 'question_funclub_recommend', '5点', chosen);
 
-  // 自由記述は空欄のままにする（必須なら「特にありません」を入れる）
+  // 自由記述はサーバー側で必須のため、意見を作らず「特にありません」と入れる
   for (const name of ['question_reason_recommend', 'question_request_contents', 'question_free_request']) {
     const area = page.locator(`textarea[name="${name}"]`).first();
     if ((await area.count()) === 0) continue;
-    if (await area.evaluate((el) => el.hasAttribute('required')).catch(() => false)) {
-      await area.fill('特にありません');
-      chosen.push(`${name} = 特にありません（必須のため）`);
-    } else {
-      chosen.push(`${name} = （空欄）`);
-    }
+    await area.fill('特にありません');
+    chosen.push(`${name} = 特にありません`);
   }
 
   log(`[${account.label}] 入力内容:`);
@@ -212,6 +208,32 @@ async function fillSurvey(page, account) {
   const after = await page.locator('body').innerText().catch(() => '');
   const message = after.replace(/\s+/g, ' ').slice(0, 300);
   log(`[${account.label}] 送信後の画面: ${message}`);
+
+  // エラーが出た場合、どの項目で出ているかを特定する
+  if (after.includes('入力内容に問題があります')) {
+    const spots = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('*'))
+        .filter(
+          (el) =>
+            el.children.length === 0 &&
+            /入力してください|選択してください/.test(el.textContent || '') &&
+            (el.offsetParent !== null || el.getClientRects().length > 0),
+        )
+        .slice(0, 10)
+        .map((el) => {
+          let node = el;
+          for (let i = 0; i < 6 && node; i += 1) {
+            const inputs = node.querySelectorAll ? node.querySelectorAll('input, select, textarea') : [];
+            if (inputs.length) {
+              return [...new Set([...inputs].map((x) => x.getAttribute('name')))].join(', ');
+            }
+            node = node.parentElement;
+          }
+          return '(対応する入力欄が不明)';
+        }),
+    );
+    log(`[${account.label}] エラーが出ている項目: ${spots.join(' / ') || '特定できず'}`);
+  }
   await saveScreenshot(page, `survey-${account.id}-after`);
   return message;
 }
