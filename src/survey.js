@@ -61,7 +61,20 @@ async function choose(page, name, labelText, chosen) {
     if (id) label = (await page.locator(`label[for="${id}"]`).first().innerText().catch(() => '')).trim();
     if (!label) label = (await input.locator('xpath=ancestor::label[1]').first().innerText().catch(() => '')).trim();
     if (label.includes(labelText)) {
-      await input.check({ force: true });
+      // サイト側の表示切り替え（例: 都県を選ぶと市区町村が出る）が動くよう、
+      // 入力欄を直接操作せずラベルをクリックする
+      const labelEl = id
+        ? page.locator(`label[for="${id}"]`).first()
+        : input.locator('xpath=ancestor::label[1]').first();
+      const clickable = (await labelEl.count()) > 0 && (await labelEl.isVisible().catch(() => false));
+      if (clickable) {
+        await labelEl.click();
+      } else if (await input.isVisible().catch(() => false)) {
+        await input.check();
+      } else {
+        await input.check({ force: true });
+        await input.dispatchEvent('change').catch(() => {});
+      }
       chosen.push(`${name} = ${label.replace(/\s+/g, ' ')}`);
       return true;
     }
@@ -92,6 +105,12 @@ async function fillSurvey(page, account) {
   await page.locator('input[name="question_age"]').first().fill(profile.age);
   chosen.push(`question_age = ${profile.age}`);
   await choose(page, 'question_prefecture', profile.prefecture, chosen);
+  // 都県を選ぶと市区町村の一覧が現れるので、表示されるまで待つ
+  await page
+    .locator('input[name="question_prefecture-tokyo"]')
+    .first()
+    .waitFor({ state: 'visible', timeout: 10000 })
+    .catch(() => log(`[${account.label}] 市区町村の一覧が表示されませんでした`));
   await choose(page, 'question_prefecture-tokyo', profile.ward, chosen);
 
   // 馬券の購入頻度（プルダウン）: 最後の選択肢＝購入しない系を選ぶ
