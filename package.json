@@ -10,7 +10,8 @@
     "test": "node test/points.test.js && node test/run-mock-test.js && node test/run-coupon-test.js && node test/run-visit-test.js",
     "coupon": "node src/coupon.js",
     "inspect:member": "node src/inspect-member.js",
-    "visit": "node src/visit.js"
+    "visit": "node src/visit.js",
+    "inspect:url": "node src/inspect-url.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
