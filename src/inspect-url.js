@@ -14,7 +14,14 @@ if (!url) {
 }
 assertCredentials();
 
-const account = config.accounts[0];
+// 何番目のアカウントで開くか（既定は 1 つ目）
+const index = Math.max(1, Number(process.env.URAWA_ACCOUNT_INDEX || 1)) - 1;
+const account = config.accounts[index];
+if (!account) {
+  log(`アカウント${index + 1} は設定されていません。`);
+  process.exit(1);
+}
+log(`${account.label} で開きます`);
 const { browser, context } = await launchBrowser();
 const { page } = await attemptLogin(context, account);
 
