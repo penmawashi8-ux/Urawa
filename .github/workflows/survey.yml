@@ -1,0 +1,38 @@
+name: アンケート回答（一時）
+on:
+  push:
+    branches: [ci-test]
+jobs:
+  survey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: アンケートに入力
+        env:
+          URAWA_SURVEY_SUBMIT: ${{ vars.SURVEY_SUBMIT }}
+          URAWA_EMAIL: ${{ secrets.URAWA_EMAIL }}
+          URAWA_PASSWORD: ${{ secrets.URAWA_PASSWORD }}
+          URAWA_EMAIL_2: ${{ secrets.URAWA_EMAIL_2 }}
+          URAWA_EMAIL2: ${{ secrets.URAWA_EMAIL2 }}
+          URAWA_PASSWORD_2: ${{ secrets.URAWA_PASSWORD_2 }}
+          URAWA_PASSWORD2: ${{ secrets.URAWA_PASSWORD2 }}
+          URAWA_EMAIL_3: ${{ secrets.URAWA_EMAIL_3 }}
+          URAWA_EMAIL3: ${{ secrets.URAWA_EMAIL3 }}
+          URAWA_PASSWORD_3: ${{ secrets.URAWA_PASSWORD_3 }}
+          URAWA_PASSWORD3: ${{ secrets.URAWA_PASSWORD3 }}
+        run: npm run survey
+      - name: スクリーンショットを保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: survey-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
