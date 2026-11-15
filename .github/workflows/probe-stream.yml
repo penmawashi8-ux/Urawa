@@ -1,0 +1,50 @@
+name: 配信取得の再検証（一時）
+on:
+  push:
+    branches: [ci-test]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VIDEO_URL: https://www.youtube.com/watch?v=zjfsiKhP08Q
+    steps:
+      - name: yt-dlp を最新にする
+        run: pip install -q --upgrade yt-dlp && yt-dlp --version
+      - name: クライアント別にメタ情報と映像取得を試す
+        continue-on-error: true
+        run: |
+          set +e
+          ok=""
+          for client in default tv_simply web_safari mweb tv android_vr ios; do
+            if [ "$client" = "default" ]; then
+              yt-dlp -J --no-warnings --skip-download "$VIDEO_URL" > "m-$client.json" 2> "e-$client.txt"
+            else
+              yt-dlp -J --no-warnings --skip-download --extractor-args "youtube:player_client=$client" \
+                "$VIDEO_URL" > "m-$client.json" 2> "e-$client.txt"
+            fi
+            if [ -s "m-$client.json" ]; then
+              title=$(python3 -c "import json;print(json.load(open('m-$client.json')).get('title'))" 2>/dev/null)
+              echo "[$client] メタ情報OK: $title"
+              [ -z "$ok" ] && ok="$client"
+            else
+              echo "[$client] 失敗: $(grep -o 'ERROR.*' "e-$client.txt" | head -1 | cut -c1-120)"
+            fi
+          done
+
+          echo
+          echo "########## 映像の実取得（30秒だけ） ##########"
+          if [ -z "$ok" ]; then
+            echo "メタ情報を取れるクライアントが無いため中止"
+            exit 0
+          fi
+          args=""
+          [ "$ok" != "default" ] && args="--extractor-args youtube:player_client=$ok"
+          yt-dlp $args -f "bv*[height<=480]/b[height<=480]/b" \
+            --download-sections "*00:00:00-00:00:30" --force-keyframes-at-cuts \
+            -o clip.mp4 "$VIDEO_URL" 2>&1 | tail -5
+          if [ -f clip.mp4 ]; then
+            echo "→ 映像の取得に成功: $(ls -lh clip.mp4 | awk '{print $5}')"
+          else
+            echo "→ 映像は取得できず（メタ情報のみ）"
+          fi
